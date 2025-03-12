@@ -3,7 +3,7 @@
 ## 🚀 Overview
 This project provides a **real-time stock price streaming service** using **WebSockets**. Clients can connect to a WebSocket URL and receive **live price updates** for subscribed stock symbols. The data is fetched from Redis, ensuring fast and efficient real-time updates.
 
----
+--- 1
 
 ## 📂 Folder Structure
 ```
