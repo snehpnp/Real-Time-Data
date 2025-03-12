@@ -20,7 +20,7 @@ const redisSubscriber = createClient({
   url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`
 });
 
-// Connect Redis Clients
+// Connect Redis Clients 1
 Promise.all([
   redisPublisher.connect(),
   redisSubscriber.connect()
