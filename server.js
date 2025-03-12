@@ -12,7 +12,7 @@ const io = socketIo(server, {
   cors: { origin: "*" }
 });
 
-// Redis Clients
+// Redis Clients 1
 const redisPublisher = createClient({
   url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`
 });
