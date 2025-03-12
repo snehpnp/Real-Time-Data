@@ -1,0 +1,43 @@
+name: Daily Auto Commit
+
+on:
+  schedule:
+    - cron: "*/2 * * * *"  # ✅ Every 2 minutes (recommended)
+
+  workflow_dispatch:  # ✅ Manual trigger enabled
+
+jobs:
+  auto-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # ✅ Full Git history fetch kar raha hai
+
+      - name: Ensure matches.txt exists
+        run: |
+          if [ ! -f matches.txt ]; then
+            echo "Initial Match Log" > matches.txt
+          fi
+
+      - name: Add Random Line
+        run: echo "New Match Added on $(date)" >> matches.txt
+
+      - name: Git Commit & Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # ✅ Fix: Stash changes to avoid rebase error
+          git stash
+          
+          git pull --rebase
+          
+          # ✅ Restore stashed changes after pull
+          git stash pop || echo "No stashed changes to restore"
+          
+          git add matches.txt
+          git commit -m "Auto-update: Added new match line" || echo "No changes to commit"
+          
+          git push
