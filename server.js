@@ -55,12 +55,6 @@ io.on("connection", (socket) => {
 
 
 
-
-
-
-
-
-
 app.post("/github-webhook", (req, res) => {
   console.log("🔔 Webhook Triggered:", req.body);
 
@@ -74,10 +68,6 @@ app.post("/github-webhook", (req, res) => {
       res.status(200).send("Deployment Successful");
   });
 });
-
-
-
-
 
 
 
