@@ -34,16 +34,16 @@ io.on("connection", (socket) => {
     console.log(`🔔 Client subscribed to ${symbol}`);
 
     // Send last stored price if available
-    const stockData = await redisPublisher.get(`stock:${symbol}`);
-    if (stockData) {
-      socket.emit("stockUpdate", JSON.parse(stockData));
-    }
+    // const stockData = await redisPublisher.get(`stock:${symbol}`);
+    // if (stockData) {
+      socket.emit("stockUpdate", JSON.parse("sneh............"));
+    // }
 
     // Subscribe to stock updates
-    const channel = `stock:${symbol}`;
-    await redisSubscriber.subscribe(channel, (message) => {
-      socket.emit("stockUpdate", JSON.parse(message));
-    });
+    // const channel = `stock:${symbol}`;
+    // await redisSubscriber.subscribe(channel, (message) => {
+      socket.emit("stockUpdate", JSON.parse("okkkk"));
+    // });
   });
 
   socket.on("disconnect", async () => {
@@ -51,8 +51,6 @@ io.on("connection", (socket) => {
     await redisSubscriber.unsubscribe(); // Unsubscribe when client disconnects
   });
 });
-
-
 
 
 
