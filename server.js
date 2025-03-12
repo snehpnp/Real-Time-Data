@@ -26,7 +26,8 @@ Promise.all([
   redisSubscriber.connect()
 ]).then(() => console.log("✅ Redis Connected")).catch(console.error);
 
-// WebSocket Logic
+
+// WebSocket Logic 1
 io.on("connection", (socket) => {
   console.log("🟢 Client connected:", socket.id);
 
