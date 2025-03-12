@@ -3,6 +3,7 @@ const http = require("http");
 const socketIo = require("socket.io");
 const { createClient } = require("redis");
 
+const { exec } = require("child_process");
 require("dotenv").config();
 
 const app = express();
@@ -50,6 +51,35 @@ io.on("connection", (socket) => {
     await redisSubscriber.unsubscribe(); // Unsubscribe when client disconnects
   });
 });
+
+
+
+
+
+
+
+
+
+
+app.post("/github-webhook", (req, res) => {
+  console.log("🔔 Webhook Triggered:", req.body);
+
+  // Jab push event aayega, git pull karega
+  exec("cd /var/www/Socket && git pull origin main && pm2 restart all", (err, stdout, stderr) => {
+      if (err) {
+          console.error(`❌ Error: ${stderr}`);
+          return res.status(500).send("Deployment Failed");
+      }
+      console.log(`✅ Success: ${stdout}`);
+      res.status(200).send("Deployment Successful");
+  });
+});
+
+
+
+
+
+
 
 // Start Server
 const PORT = process.env.PORT || 5000;
