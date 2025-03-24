@@ -3,31 +3,27 @@ const WebSocket = require("ws");
 const CryptoJS = require("crypto-js");
 const Stock = require("../models/Stock");
 const Credential = require("../models/Credentials");
-const {  redisClient } = require("../config/db");
-require("dotenv").config();
+const { io } = require("../server"); // ✅ Import io instance
 
 let ws;
+let isSocketConnected = false; // Track WebSocket connection status
 
 const Alice_Socket = async () => {
   try {
-    console.log("Initializing AliceBlue WebSocket...");
-    const now = new Date();
-    const curtime = parseInt(`${now.getHours()}${now.getMinutes()}`);
+    console.log("🚀 Initializing AliceBlue WebSocket...");
 
     const credentialsGet = await Credential.findOne({});
+    if (!credentialsGet) {
+      console.error("❌ No credentials found!");
+      return;
+    }
 
-    const {
-      user_id: userId,
-      access_token: userSession,
-      channel_list,
-    } = credentialsGet;
+    const { user_id: userId, access_token: userSession, channel_list } = credentialsGet;
 
-    const aliceBaseUrl =
-      "https://ant.aliceblueonline.com/rest/AliceBlueAPIService/api/";
-    const loginPayload = { loginType: "API" };
+    const aliceBaseUrl = "https://ant.aliceblueonline.com/rest/AliceBlueAPIService/api/";
     const response = await axios.post(
       `${aliceBaseUrl}/ws/createSocketSess`,
-      loginPayload,
+      { loginType: "API" },
       {
         headers: {
           Authorization: `Bearer ${userId} ${userSession}`,
@@ -36,61 +32,102 @@ const Alice_Socket = async () => {
       }
     );
 
-    if (response.data.stat !== "Ok") return;
+    if (response.data.stat !== "Ok") {
+      console.error("❌ Failed to create WebSocket session:", response.data);
+      return;
+    }
 
     ws = new WebSocket("wss://ws1.aliceblueonline.com/NorenWS/");
 
-    ws.onopen = () => {
-      const encryptedToken = CryptoJS.SHA256(
+    ws.onopen = function () {
+      console.log("✅ WebSocket Connected!");
+      isSocketConnected = true;
+
+      const encrcptToken = CryptoJS.SHA256(
         CryptoJS.SHA256(userSession).toString()
       ).toString();
 
-      ws.send(
-        JSON.stringify({
-          susertoken: encryptedToken,
-          t: "c",
-          actid: `${userId}_API`,
-          uid: `${userId}_API`,
-          source: "API",
-        })
-      );
+      const initCon = {
+        susertoken: encrcptToken,
+        t: "c",
+        actid: userId + "_API",
+        uid: userId + "_API",
+        source: "API",
+      };
+
+      ws.send(JSON.stringify(initCon));
     };
 
-    ws.onmessage = async (msg) => {
-      const data = JSON.parse(msg.data);
+    ws.onmessage = async function (msg) {
+      const response = JSON.parse(msg.data);
 
-      if (data.tk && data.lp && data.e && data.ft) {
-        const now = new Date();
-        const curTime = parseInt(`${now.getHours()}${now.getMinutes()}`);
+      if (response.tk) {
+        try {
+          if (response.lp !== undefined && response.e !== undefined && response.ft !== undefined) {
+            const now = new Date();
+            const curTime = parseInt(`${now.getHours()}${now.getMinutes()}`);
 
-        await Stock.updateOne(
-          { _id: data.tk },
-          {
-            $set: {
-              _id: data.tk,
-              lp: data.lp,
-              exc: data.e,
-              curTime,
-              ft: data.ft,
-            },
-          },
-          { upsert: true }
-        );
+            // Emit stock update via Socket.IO
+            io.emit("stockUpdate", {
+              symbol: response.tk,
+              price: response.lp,
+              exchange: response.e,
+              timestamp: curTime,
+            });
 
-        // Cache in Redis
-          await redisClient.set(`stock:${data.tk}`, JSON.stringify(data));
-      } else if (data.s === "OK") {
-        ws.send(JSON.stringify({ k: channel_list, t: "t" }));
+            // Update stock data in the database
+            await Stock.updateOne(
+              { _id: response.tk },
+              {
+                $set: {
+                  _id: response.tk,
+                  lp: response.lp,
+                  exc: response.e,
+                  curTime,
+                  ft: response.ft,
+                },
+              },
+              { upsert: true }
+            );
+          }
+        } catch (error) {
+          console.error("❌ Error processing stock data:", error);
+        }
+      } else if (response.s === "OK") {
+        let json = {
+          k: channel_list,
+          t: "t",
+        };
+        await ws.send(JSON.stringify(json));
       }
     };
 
-    ws.onclose = () => {
-      console.log("AliceBlue WebSocket closed. Reconnecting in 5s...");
-      setTimeout(Alice_Socket, 5000);
+    ws.onerror = function (error) {
+      console.error("❌ WebSocket error:", error);
+      isSocketConnected = false;
+    };
+
+    ws.onclose = async function () {
+      console.log("🔴 WebSocket Disconnected!");
+      isSocketConnected = false;
+      await socketRestart();
     };
   } catch (error) {
-    console.error("Error in Alice_Socket:", error);
+    console.error("❌ Error in Alice_Socket:", error);
   }
 };
 
-module.exports = { Alice_Socket };
+// ✅ Function to restart WebSocket if disconnected
+const socketRestart = async () => {
+  if (!isSocketConnected) {
+    console.log("♻️ Reconnecting WebSocket in 5 seconds...");
+    setTimeout(Alice_Socket, 5000);
+  }
+};
+
+// ✅ Function to check socket connection status
+const getSocketStatus = () => {
+  return isSocketConnected;
+};
+
+module.exports = { Alice_Socket, getSocketStatus };
