@@ -17,3 +17,4 @@ socket.on("stockUpdate", (data) => {
 socket.on("disconnect", () => {
   console.log("❌ Disconnected from server");
 });
+  
