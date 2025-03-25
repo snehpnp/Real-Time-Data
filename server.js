@@ -15,21 +15,8 @@ module.exports = { io }; // ✅ Export io instance for use in aliceSocket.js
 
 app.use(express.json());
 
-  // GitHub Webhook for Auto Deployment
-  // app.post("/github-webhook", (req, res) => {
-  //   console.log("🔔 Webhook Triggered:", req.body);
-  //   exec(
-  //     "cd /var/www/Socket && git pull origin main && pm2 restart all",
-  //     (err, stdout, stderr) => {
-  //       if (err) {
-  //         console.error(`❌ Error: ${stderr}`);
-  //         return res.status(500).send("Deployment Failed");
-  //       }
-  //       console.log(`✅ Success: ${stdout}`);
-  //       res.status(200).send("Deployment Successful");
-  //     }
-  //   );
-  // });
+require("./services/Apis")(app,io);
+
 
 const { Alice_Socket } = require("./services/aliceSocket");
 

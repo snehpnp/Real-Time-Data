@@ -5,6 +5,7 @@ const CredentialsSchema = new mongoose.Schema({
     access_token: String,
     request_token: String,
     channel_list:String,
+    status:String
 
 }, { timestamps: true });
 
