@@ -130,8 +130,20 @@ console.log(userSubscriptions);
                         }
                     });
     
-                    // ✅ Agar database me store karna ho
-                    // await Stock.insertMany({ token: response.tk, lp: response.lp, exc: response.e, curTime, ...response });
+                    await Stock.insertMany({
+                      token: response.tk,
+                      lp: response.lp,
+                      exc: response.e,
+                      curTime,
+                      ft: response.ft,
+                      t: response?.t,
+                      pc: response?.pc,
+                      v: response?.v,
+                      bp1: response?.bp1,
+                      sp1: response?.sp1,
+                      bq1: response?.bq1,
+                      sq1: response?.sq1,
+                    });
                 }
             } catch (error) {
                 console.error("❌ Error processing stock data:", error);

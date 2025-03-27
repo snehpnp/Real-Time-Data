@@ -13,7 +13,15 @@ db.createView("oneMinuteView", "stocks", [
       lowLp: { $min: "$lp" }, // Lowest LP
       openLp: { $first: "$lp" }, // First LP (Open Price)
       closeLp: { $last: "$lp" }, // Last LP (Close Price)
-      count: { $sum: 1 } // Number of records
+      count: { $sum: 1 } ,// Number of records
+      exc: { $exc: 1 } ,
+      ft : { $ft: 1 } ,
+      t : { $t: 1 } ,
+      pc : { $pc: 1 } ,
+      v : { $v: 1 } 
+
+
+
     }
   },
   {
@@ -33,7 +41,12 @@ db.createView("oneMinuteView", "stocks", [
       sp1:1,
       bq1 :1,
       sq1 :1,
-      pc:1
+      pc:1,
+      exc:1,
+      ft:1,
+      t:1,
+      v:1
+
     }
   }
 ]);

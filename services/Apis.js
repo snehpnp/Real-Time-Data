@@ -3,6 +3,11 @@ const { MongoClient } = require("mongodb");
 module.exports = function (app, io) {
   const mongoURI = process.env.MONGO_URI; // MongoDB connection string
   const dbName = "test"; // Your database name
+  const client = new MongoClient(mongoURI);
+   client.connect();
+  const db = client.db(dbName);
+
+
 
   app.get("/get/oneminut/data", async (req, res) => {
     try {
@@ -10,9 +15,6 @@ module.exports = function (app, io) {
       const timeInterval = parseInt(time); // Convert time string to number
       const validIntervals = [1, 3, 5, 10, 15, 30, 60]; // Allowed intervals
 
-      const client = new MongoClient(mongoURI);
-      await client.connect();
-      const db = client.db(dbName);
       const collection = db.collection("oneMinuteView");
 
       let Query = {};
@@ -86,4 +88,25 @@ module.exports = function (app, io) {
       res.status(500).json({ success: false, message: "Internal server error" });
     }
   });
+  const VIEW_NAME = "oneMinuteView";
+  const TARGET_COLLECTION = "oneMinuteData";
+  const copyViewToCollection = async () => {
+    try {
+      console.log("🚀 Fetching data from view...");
+      const viewData = await mongoose.connection.db.collection(VIEW_NAME).find().toArray();
+  
+      if (viewData.length === 0) {
+        console.log("⚠️ No data found in the view!");
+        return;
+      }
+  
+      console.log(`📌 Found ${viewData.length} records. Inserting into collection...`);
+      await mongoose.connection.db.collection(TARGET_COLLECTION).insertMany(viewData);
+      console.log("✅ Data successfully copied to the collection!");
+  
+    } catch (error) {
+      console.error("❌ Error copying data:", error);
+    }
+  };
+  
 };

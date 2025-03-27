@@ -1,0 +1,59 @@
+### **Complete Video Script (Simplified & Project-Based)**  
+
+**"Hello, my name is [Your Name], and I am a MERN stack developer with experience in building scalable web applications, API integrations, and managing frontend and backend workflows. Today, I will be answering a few technical questions related to Node.js, system monitoring, and process handling, based on my experience."**  
+
+---
+
+### **1️⃣ Using Node.js with Docker/Kubernetes to Scale High-Traffic Applications**  
+*"In my project **Smart Algo**, an automated trading platform, we handled a large number of API requests in real-time. Although I haven’t directly used Docker or Kubernetes, I understand their importance in scaling applications. If needed, I can containerize Node.js applications using Docker and deploy them in a Kubernetes environment for better load balancing and fault tolerance. I am always open to learning and implementing new technologies for improving scalability and performance."*  
+
+---
+
+### **2️⃣ CI/CD Pipeline in GCP or AWS**  
+*"So far, I haven't directly implemented a CI/CD pipeline, but I understand the process and best practices. I have worked with Git for version control and have experience in managing deployments. If required, I can set up a CI/CD pipeline using GitHub Actions, GitLab CI/CD, or Jenkins to automate the build, test, and deployment processes. Continuous integration ensures that every code change is tested before deployment, reducing errors and improving stability."*  
+
+---
+
+### **3️⃣ Key Metrics for Monitoring Production Systems**  
+*"In my projects like **Outbook** (an accounting management system) and **Copy Trading** (a financial trading platform), monitoring was crucial. The key metrics I prioritize include:"*  
+✅ **CPU & Memory Usage** – To ensure the server isn’t overloaded.  
+✅ **Response Time & Latency** – To monitor API performance and user experience.  
+✅ **Error Rates** – To detect bugs or failing requests early.  
+✅ **Database Performance** – To track slow queries and optimize database efficiency.  
+✅ **Uptime & Downtime Alerts** – To be instantly notified of system failures.  
+
+*"These metrics help in proactive troubleshooting and maintaining a smooth user experience."*  
+
+---
+
+### **4️⃣ How Node.js Handles Asynchronous Operations (Event Loop)**  
+*"Node.js uses an **event loop** to handle asynchronous operations efficiently. Instead of blocking execution, Node.js uses a non-blocking, event-driven model. Let me explain it simply:"*  
+
+*"Imagine a restaurant. A waiter takes an order and moves on to the next customer instead of waiting for the food to be prepared. Once the food is ready, they serve it. Similarly, Node.js does not wait for tasks like database queries or API requests to complete; it keeps processing other tasks and executes callbacks when the results are available. This makes it highly efficient for real-time applications."*  
+
+---
+
+### **5️⃣ Difference Between Fork, Spawn, and Exec in Node.js**  
+*"In **Manual Software** (a task management system), we needed background processing. That’s where Node.js child processes are useful. The key differences are:"*  
+
+🔹 **`spawn()` – Best for large data processing**  
+*"It streams data instead of buffering it all at once. Useful for handling large log files or continuous outputs."*  
+
+🔹 **`exec()` – Best for small outputs**  
+*"It stores all output in memory and returns it at once. Works well for small commands but can fail for large outputs due to memory limitations."*  
+
+🔹 **`fork()` – Best for running another Node.js script**  
+*"It is used to create a separate Node.js process that can communicate with the parent process. Useful for running background tasks like data processing or API polling."*  
+
+*"In my experience, choosing the right method depends on the use case and system requirements."*  
+
+---
+
+### **Conclusion**  
+*"That was a brief overview of my technical experience and how I approach these concepts in real-world projects. As a MERN stack developer, I focus on building scalable and optimized applications, and I am always eager to expand my knowledge in DevOps and cloud technologies when needed."*  
+
+*"Thank you!"* 🚀  
+
+---
+
+### **Would you like any modifications or additional details? Let me know! 😊**
