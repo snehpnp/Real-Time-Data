@@ -17,6 +17,10 @@ const Alice_Socket = async () => {
       console.error("❌ No credentials found!");
       return;
     }
+    if(credentialsGet?.user_id == "" || credentialsGet?.access_token == "" || credentialsGet?.channel_list == "" ||  credentialsGet?.access_token == null || credentialsGet?.channel_list == null || credentialsGet?.user_id == null){
+      console.error("❌ No credentials found!");
+      return;
+    }
 
     const {
       user_id: userId,
@@ -152,7 +156,11 @@ const Alice_Socket = async () => {
       await socketRestart();
     };
   } catch (error) {
-    console.error("❌ Error in Alice_Socket:", error);
+    if(error?.response?.data == "Unauthorized"){
+      console.error("❌ Unauthorized access. Please login again!");
+      await Credential.updateOne({}, { $set: { access_token: null } });
+ 
+    }
   }
 };
 
