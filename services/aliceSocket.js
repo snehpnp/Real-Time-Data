@@ -18,9 +18,14 @@ const Alice_Socket = async () => {
       return;
     }
 
-    const { user_id: userId, access_token: userSession, channel_list } = credentialsGet;
+    const {
+      user_id: userId,
+      access_token: userSession,
+      channel_list,
+    } = credentialsGet;
 
-    const aliceBaseUrl = "https://ant.aliceblueonline.com/rest/AliceBlueAPIService/api/";
+    const aliceBaseUrl =
+      "https://ant.aliceblueonline.com/rest/AliceBlueAPIService/api/";
     const response = await axios.post(
       `${aliceBaseUrl}/ws/createSocketSess`,
       { loginType: "API" },
@@ -63,32 +68,66 @@ const Alice_Socket = async () => {
 
       if (response.tk) {
         try {
-          if (response.lp !== undefined && response.e !== undefined && response.ft !== undefined) {
+          if (
+            response.lp !== undefined &&
+            response.e !== undefined &&
+            response.ft !== undefined
+          ) {
             const now = new Date();
             const curTime = parseInt(`${now.getHours()}${now.getMinutes()}`);
 
             // Emit stock update via Socket.IO
             io.emit("stockUpdate", {
-              symbol: response.tk,
-              price: response.lp,
+              token: response.tk,
               exchange: response.e,
               timestamp: curTime,
+              lp: response.lp,
+              t: response?.t,
+              pc: response?.pc,
+              v: response?.v,
+              ft: response?.ft,
+              bp1: response?.bp1,
+              sp1: response?.sp1,
+              bq1: response?.bq1,
+              sq1: response?.sq1,
             });
 
             // Update stock data in the database
-            await Stock.updateOne(
-              { _id: response.tk },
-              {
-                $set: {
-                  _id: response.tk,
-                  lp: response.lp,
-                  exc: response.e,
-                  curTime,
-                  ft: response.ft,
-                },
-              },
-              { upsert: true }
-            );
+            // await Stock.updateOne(
+            //   { _id: response.tk },
+            //   {
+            //     $set: {
+            //       _id: response.tk,
+            //       lp: response.lp,
+            //       exc: response.e,
+            //       curTime,
+            //       ft: response.ft,
+            //       t:response?.t,
+            //       pc:response?.pc,
+            //       v:response?.v,
+            //       bp1:response?.bp1,
+            //       sp1:response?.sp1,
+            //       bq1:response?.bq1,
+            //       sq1:response?.sq1,
+            //     },
+            //   }
+            // );
+
+            // INSERT INTO DATABASE
+            await Stock.insertMany({
+              token: response.tk,
+              lp: response.lp,
+              exc: response.e,
+              curTime,
+              ft: response.ft,
+              t: response?.t,
+              pc: response?.pc,
+              v: response?.v,
+              bp1: response?.bp1,
+              sp1: response?.sp1,
+              bq1: response?.bq1,
+              sq1: response?.sq1,
+            });
           }
         } catch (error) {
           console.error("❌ Error processing stock data:", error);
