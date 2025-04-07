@@ -27,6 +27,8 @@ io.on("connection", (socket) => {
         const tokens = stockSymbols.split("#"); // Split token string into array
         userSubscriptions[socket.id] = tokens;
         console.log(`🔗 ${socket.id} subscribed to tokens:`, tokens);
+
+        ConnectSocketNewToken(socket.id, stockSymbols); // New tokens ke liye connection establish karein
     });
 
     // Client disconnect hone par data remove karein
@@ -36,7 +38,55 @@ io.on("connection", (socket) => {
     });
 });
 
-console.log(userSubscriptions);
+  const ConnectSocketNewToken = async (socketId, stockSymbols) => {
+    const numbersToken = stockSymbols && stockSymbols.match(/\d+/g);
+
+
+
+     const credentialsGet = await Credential.findOne({});
+    if (!credentialsGet) {
+      console.error("❌ No credentials found!");
+      return;
+    }
+    
+    if(credentialsGet.channel_list == "" || credentialsGet.channel_list == null){
+        console.error("❌ No credentials found!");
+        return;
+    }
+
+    const { channel_list } = credentialsGet;
+    const numbersToken1 = channel_list && channel_list.match(/\d+/g);
+    console.log("🔗 User Subscribed:", numbersToken);
+
+    console.log("🔗 Already Subscribed:", numbersToken1);
+
+    const newTokens = numbersToken.filter(token => !numbersToken1.includes(token));
+    console.log("🆕 New tokens to subscribe:", newTokens);
+
+    if (newTokens.length > 0) {
+
+      const json = {
+        k: newTokens.join("#"),
+        t: "t",
+      };
+
+      if (ws && isSocketConnected) {
+        ws.send(JSON.stringify(json));
+        console.log("✅ Subscribed to new tokens:", newTokens);
+      } else {
+        console.error("❌ WebSocket is not connected. Cannot subscribe to new tokens.");
+      }
+    } else {
+      console.log("ℹ️ No new tokens to subscribe.");
+    }
+
+
+
+
+
+
+
+  }
 
 
 
@@ -109,6 +159,8 @@ console.log(userSubscriptions);
                     const now = new Date();
                     const curTime = parseInt(`${now.getHours()}${now.getMinutes()}`);
     
+
+
                     // ✅ Sirf relevant clients ko update bhejna
                     Object.entries(userSubscriptions).forEach(([socketId, tokens]) => {
                      

@@ -1,0 +1,112 @@
+const axios = require("axios");
+const csvParser = require("csv-parser");
+const { Readable } = require("stream");
+const alice_tokens = require("../models/Alicetoken");
+
+module.exports = function (app, io) {
+  const TokenUrl = [
+    { url: "https://v2api.aliceblueonline.com/restpy/static/contract_master/NFO.csv", key: "ALICE_NFO" },
+    { url: "https://v2api.aliceblueonline.com/restpy/static/contract_master/NSE.csv", key: "ALICE_NSE" },
+    { url: "https://v2api.aliceblueonline.com/restpy/static/contract_master/MCX.csv", key: "ALICE_MCX" },
+    { url: "https://v2api.aliceblueonline.com/restpy/static/contract_master/CDS.csv", key: "ALICE_CDS" },
+    { url: "https://v2api.aliceblueonline.com/restpy/static/contract_master/BFO.csv", key: "ALICE_BFO" },
+    { url: "https://v2api.aliceblueonline.com/restpy/static/contract_master/BSE.csv", key: "ALICE_BSE" },
+  ];
+
+  const updateTokensDirectly = async () => {
+    const totalStart = Date.now();
+    let grandTotalInserted = 0;
+
+    const processCsvFromUrl = async ({ url }) => {
+      const start = Date.now();
+      let totalInserted = 0;
+      const fileName = url.split("/").pop();
+
+      try {
+        const response = await axios.get(url);
+        const csvData = response.data;
+        const rows = [];
+
+        await new Promise((resolve, reject) => {
+          Readable.from(csvData)
+            .pipe(csvParser())
+            .on("data", (row) => rows.push(row))
+            .on("end", resolve)
+            .on("error", reject);
+        });
+
+        const bulkOps = [];
+
+        const existingTokens = new Set(
+          (await alice_tokens.find({}, { instrument_token: 1 })).map((doc) => doc.instrument_token)
+        );
+        
+        for (const row of rows) {
+          try {
+            const tradesymbol = row["Trading Symbol"]?.trim();
+            const instrument_token = row["Token"]?.trim();
+            const segment = row["Exchange Segment"]?.trim();
+            const symbol = row["Symbol"]?.trim();
+            const expiry = row["Expiry Date"];
+            const strike = parseFloat(row["Strike Price"]) || 0;
+            const option_type = row["Option Type"]?.trim();
+            const lotSize = parseInt(row["Lot Size"]) || 0;
+        
+            if (!tradesymbol || !instrument_token || !segment) continue;
+        
+            if (!existingTokens.has(instrument_token)) {
+              bulkOps.push({
+                insertOne: {
+                  document: {
+                    symbol,
+                    expiry,
+                    strike,
+                    option_type,
+                    segment,
+                    instrument_token,
+                    lotsize: lotSize,
+                    tradesymbol,
+                    exch_seg: segment,
+                    tkr: tradesymbol,
+                    createdAt: new Date(),
+                  },
+                },
+              });
+            }
+          } catch (err) {
+            console.error(`❌ Error preparing row in ${fileName}:`, err.message);
+          }
+        }
+        
+
+        if (bulkOps.length > 0) {
+          const result = await alice_tokens.bulkWrite(bulkOps);
+          totalInserted += result.upsertedCount + result.modifiedCount;
+        }
+
+        const timeTaken = ((Date.now() - start) / 1000).toFixed(2);
+        console.log(`✅ Processed ${fileName} | Rows: ${rows.length} | Inserted/Updated: ${totalInserted} | Time: ${timeTaken}s`);
+        return totalInserted;
+      } catch (err) {
+        console.error(`❌ Error in processing ${fileName}:`, err.message);
+        return 0;
+      }
+    };
+
+    const results = await Promise.all(TokenUrl.map(processCsvFromUrl));
+    grandTotalInserted = results.reduce((acc, val) => acc + val, 0);
+    const totalTimeTaken = ((Date.now() - totalStart) / 1000).toFixed(2);
+
+    console.log(`\n🚀 All Token Files Updated | Total Inserted/Updated: ${grandTotalInserted} | Total Time: ${totalTimeTaken}s\n`);
+  };
+
+  app.get("/update/alice/token", async (req, res) => {
+    try {
+      await updateTokensDirectly();
+      res.json({ success: true, message: "Alice tokens updated in MongoDB (via API)." });
+    } catch (error) {
+      console.error("❌ Error updating tokens:", error);
+      res.status(500).json({ success: false, message: "Token update failed." });
+    }
+  });
+};

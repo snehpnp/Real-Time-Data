@@ -1,19 +1,18 @@
 const mongoose = require("mongoose");
-
 const oneMinuteDataSchema = new mongoose.Schema(
   {
     _id: String,
-    lp: Number, // Last Price
-    exc: String, // Exchange
-    curTime: Number, // Timestamp
-    ft: String, // Future Trade Indicator
-    t: String, // Trade Indicator
-    pc: String, // Previous Close
-    v: String, // Volume
-    bp1: String, // Best Buy Price
-    sp1: String, // Best Sell Price
-    bq1: String, // Best Buy Quantity
-    sq1: String, // Best Sell Quantity
+    lp: Number,
+    exc: String,
+    curTime: Number,
+    ft: String,
+    t: String,
+    pc: Number,
+    v: Number,
+    bp1: Number,
+    sp1: Number,
+    bq1: Number,
+    sq1: Number,
     token: String,
 
     avgLp: Number,
@@ -23,8 +22,13 @@ const oneMinuteDataSchema = new mongoose.Schema(
     openLp: Number,
     closeLp: Number,
     count: Number,
-  },
-  { timestamps: true }
+  }
 );
+
+// Indexes
+oneMinuteDataSchema.index({ token: 1, curTime: -1 });
+oneMinuteDataSchema.index({ curTime: -1 });
+
+// module.exports = oneMinuteDataSchema;
 
 module.exports = mongoose.model("oneMinuteData", oneMinuteDataSchema);

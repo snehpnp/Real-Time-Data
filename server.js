@@ -16,6 +16,7 @@ module.exports = { io }; // ✅ Export io instance for use in aliceSocket.js
 app.use(express.json());
 
 require("./services/Apis")(app,io);
+require("./services/Token")(app, io); // ✅ Token Service
 
 
 const { Alice_Socket } = require("./services/aliceSocket");
