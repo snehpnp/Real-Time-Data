@@ -10,7 +10,7 @@ socket.on("connect", () => {
   const userId = "user1"; 
   socket.emit("subscribe", userId);
 
-  const stockSymbols = "NFO|74361#NFO|74364#NFO|74375#NFO|743802";
+  const stockSymbols = "NFO|54452#NSE|14366#NSE|3045"; // Example stock symbols
   socket.emit("subscribeStocks", stockSymbols);
 });
 

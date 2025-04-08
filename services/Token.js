@@ -2,6 +2,12 @@ const axios = require("axios");
 const csvParser = require("csv-parser");
 const { Readable } = require("stream");
 const alice_tokens = require("../models/Alicetoken");
+const Stock = require("../models/Stock");
+const Credential = require("../models/Credentials");
+const CryptoJS = require("crypto-js");
+const TokensModel = require("../models/Token");
+const moment = require("moment");
+const Liveprice = require("../models/Liveprice");
 
 module.exports = function (app, io) {
   const TokenUrl = [
@@ -144,7 +150,7 @@ module.exports = function (app, io) {
     }
   });
 
-  app.get("/createChain", async (req, res) => {
+  app.get("/Liveprice/tokens", async (req, res) => {
     try {
       const tokens = await alice_tokens
         .find({ segment: "f" })
@@ -154,11 +160,9 @@ module.exports = function (app, io) {
           expiry: 1,
           segment: 1,
           Exch: 1,
+          exch_seg: 1,
         })
         .sort({ expiry: 1 });
-
-        console.log("tokens", tokens);
-
 
       const groupedTokens = tokens.reduce((acc, token) => {
         if (!acc[token.symbol]) {
@@ -169,29 +173,211 @@ module.exports = function (app, io) {
 
       const result = Object.values(groupedTokens);
 
+      if (result.length > 0) {
+        const data = result.map((token) => {
+          return {
+            instrument_token: token.instrument_token,
+            symbol: token.symbol,
+            expiry: token.expiry,
+            segment: token.segment,
+            Exch: token.Exch,
+            exchange: token.exch_seg,
+          };
+        });
 
-      let NseChain = "";
-      result.map((token) => {
-        NseChain += token?.Exch + "|" + token?.instrument_token + "#";
-      });
+        if (data.length > 0) {
+          await Liveprice.bulkWrite(
+            data.map((token) => {
+              return {
+                updateOne: {
+                  filter: { symbol: token.symbol },
+                  update: { $set: token },
+                  upsert: true,
+                },
+              };
+            })
+          );
+        }
+      }
 
-      NseChain = NseChain && NseChain.slice(0, -1);
+      // Get current month range
+      const startOfMonth = moment().startOf("month").format("YYYY-MM-DD");
+      const endOfMonth = moment().endOf("month").format("YYYY-MM-DD");
 
-      console.log("NseChain", NseChain);
+      const bseTokens = await Promise.all(
+        ["SENSEX", "BANKEX"].map(async (symbol) => {
+          const token = await alice_tokens
+            .findOne({
+              InstrumentType: "IF",
+              symbol: symbol,
+              expiry: { $gte: startOfMonth, $lte: endOfMonth },
+            })
+            .sort({ expiry: -1 })
+            .limit(1);
 
+          return token;
+        })
+      );
 
+      if (bseTokens && bseTokens.length > 0) {
+        let BseChain = bseTokens.map((token) => {
+          return {
+            instrument_token: token.instrument_token,
+            symbol: token.symbol,
+            expiry: token.expiry,
+            segment: token.segment,
+            Exch: token.Exch,
+            exchange: token.exch_seg,
+          };
+        });
 
+        console.log("bseTokens", BseChain);
+        if (BseChain.length > 0) {
+          await Liveprice.bulkWrite(
+            BseChain.map((token) => {
+              return {
+                updateOne: {
+                  filter: { symbol: token.symbol },
+                  update: { $set: token },
+                  upsert: true,
+                },
+              };
+            })
+          );
+        }
+      }
 
-      const GetNseTokens = await alice_tokens
-        .find({ Exch: "NSE", InstrumentType: "IF", symbol: "SENSEX" })
-        .sort({ expiry: 1 });
-
-      // console.log("NSE Tokens:", GetNseTokens);
-
-      res.json({ success: true, tokens });
+      res.json({ success: true, message: "Live Price Token Update" });
     } catch (error) {
       console.error("❌ Error fetching tokens:", error);
       res.status(500).json({ success: false, message: "Token fetch failed." });
     }
   });
+
+  app.get("/update/stock-token", async (req, res) => {
+    try {
+      let Tokens = [
+        "RELIANCE",
+        "HDFCBANK",
+        "INFY",
+        "TCS",
+        "ICICIBANK",
+        "HINDUNILVR",
+        "HDFC",
+        "KOTAKBANK",
+        "SBIN",
+        "BHARTIARTL",
+        "ASIANPAINT",
+        "MARUTI",
+        "ITC",
+        "NESTLEIND",
+        "BAJFINANCE",
+        "HCLTECH",
+        "WIPRO",
+        "TITAN",
+        "ULTRACEMCO",
+        "TATAMOTORS",
+        "TATASTEEL",
+        "POWERGRID",
+        "DIVISLAB",
+        "DRREDDY",
+        "M&M",
+        "BAJAJAUTO",
+        "GRASIM",
+        "ADANIPORTS",
+        "HDFCBANK",
+        "ICICIBANK",
+        "AXISBANK",
+        "KOTAKBANK",
+        "SBIN",
+        "INDUSINDBK",
+        "YESBANK",
+        "IDFCFIRSTB",
+        "BANDHANBNK",
+        "RBLBANK",
+        "FEDERALBNK",
+        "AUBANK",
+      ];
+
+      let stockTokens = await alice_tokens.find({
+        symbol: { $in: Tokens },
+        Exch: "NSE",
+        segment: "cm",
+      });
+      let stockTokenData = stockTokens.map((token) => {
+        return {
+          instrument_token: token.instrument_token,
+          symbol: token.symbol,
+          expiry: token.expiry,
+          segment: token.segment,
+          Exch: token.Exch,
+          exchange: token.exch_seg,
+        };
+      });
+      if (stockTokenData.length > 0) {
+        await TokensModel.bulkWrite(
+          stockTokenData.map((token) => {
+            return {
+              updateOne: {
+                filter: { symbol: token.symbol },
+                update: { $set: token },
+                upsert: true,
+              },
+            };
+          })
+        );
+      }
+
+      res.json({
+        success: true,
+        message: "Stock tokens updated successfully.",
+      });
+    } catch (error) {
+      console.error("❌ Error updating stock tokens:", error);
+      res
+        .status(500)
+        .json({ success: false, message: "Failed to update stock tokens." });
+    }
+  });
+
+  app.post("/update/alice-credentials", async (req, res) => {
+    try {
+      const { token, userid } = req.body;
+
+      if (!token || !userid) {
+        return res.status(400).json({
+          success: false,
+          message: "Token and User ID are required.",
+        });
+      }
+
+      const UpdateCredentials = await Credential.updateOne(
+        { user_id: userid },
+        { access_token: token },
+
+        {upsert: true}
+      );
+      if (!UpdateCredentials) {
+        return res.status(404).json({
+          success: false,
+          message: "Credentials not found.",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Credentials updated successfully.",
+        UpdateCredentials
+      });
+    } catch (error) {
+      console.error("❌ Error updating credentials:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to update credentials.",
+      });
+    }
+  });
+
+
+  
 };

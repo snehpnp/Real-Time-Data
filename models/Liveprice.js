@@ -12,4 +12,4 @@ const tokenssSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-module.exports = mongoose.model("Token", tokenssSchema,"Tokens");
+module.exports = mongoose.model("liveprice", tokenssSchema,"liveprice");
