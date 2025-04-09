@@ -6,6 +6,8 @@ const TokensModel = require("../models/Token");
 const moment = require("moment");
 const Liveprice = require("../models/Liveprice");
 
+const {IndexPrice} = require("./aliceSocket");
+
 module.exports = function (app, io) {
   const TokenUrl = [
     {
@@ -491,6 +493,7 @@ module.exports = function (app, io) {
           message: "Credentials not found.",
         });
       }
+      IndexPrice();
 
       res.json({
         success: true,
