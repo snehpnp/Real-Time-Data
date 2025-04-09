@@ -77,8 +77,7 @@ const subscribeToNewTokens = async (socketId, stockSymbols) => {
 
 // UPDATE INDEX PRICE
 const IndexPrice = async () => {
-  console.log("IndexPrice function called");
-  const credentials = await Credential.findOne({});
+  const credentials = await Credential.findOne({}).sort({updatedAt: -1})
   if (!credentials?.channel_list) {
     log("No valid credentials found!");
     return "No valid credentials found!";
