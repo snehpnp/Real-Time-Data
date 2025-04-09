@@ -2,9 +2,6 @@ const axios = require("axios");
 const csvParser = require("csv-parser");
 const { Readable } = require("stream");
 const alice_tokens = require("../models/Alicetoken");
-const Stock = require("../models/Stock");
-const Credential = require("../models/Credentials");
-const CryptoJS = require("crypto-js");
 const TokensModel = require("../models/Token");
 const moment = require("moment");
 const Liveprice = require("../models/Liveprice");
@@ -40,6 +37,7 @@ module.exports = function (app, io) {
   const updateTokensDirectly = async () => {
     const totalStart = Date.now();
     let grandTotalInserted = 0;
+    const details = [];
 
     const processCsvFromUrl = async ({ url }) => {
       const start = Date.now();
@@ -86,14 +84,18 @@ module.exports = function (app, io) {
               option_type,
               segment:
                 InstrumentType == "FUTIDX"
-                  ? "f"
-                  : segment && segment?.split("_")[1],
-              instrument_token,
+                  ? "F"
+                  : InstrumentType == "IF"
+                  ? "BF"
+                  : segment && segment?.split("_")[1]?.toUpperCase(),
+              instrument_token: instrument_token,
               lotsize: lotSize,
               tradesymbol,
-              exch_seg: segment && segment?.split("_")[0],
-
+              exch_seg: segment && segment?.split("_")[0]?.toUpperCase(),
               createdAt: new Date(),
+              unique_key: `${instrument_token}_${segment
+                ?.split("_")[0]
+                ?.toUpperCase()}`,
             });
           } catch (err) {
             console.error(
@@ -107,7 +109,7 @@ module.exports = function (app, io) {
           const result = await alice_tokens.insertMany(insertDocs, {
             ordered: false,
           });
-          insertedCount = result.length;
+          insertedCount = result?.length;
         } catch (err) {
           if (err.writeErrors) {
             insertedCount = err.result?.result?.nInserted || 0;
@@ -119,11 +121,26 @@ module.exports = function (app, io) {
 
         const timeTaken = ((Date.now() - start) / 1000).toFixed(2);
         console.log(
-          `✅ Processed ${fileName} | Rows: ${rows.length} | Inserted: ${insertedCount} | Time: ${timeTaken}s`
+          `✅ Processed ${fileName} | Rows: ${rows?.length} | Inserted: ${insertedCount} | Time: ${timeTaken}s`
         );
+
+        details.push({
+          fileName,
+          totalRows: rows.length,
+          inserted: insertedCount,
+          timeTaken: `${timeTaken}s`,
+        });
+
         return insertedCount;
       } catch (err) {
-        console.error(`❌ Error in processing ${fileName}:`, err.message);
+        console.error(`❌ Error in processing ${fileName}:`, err?.message);
+        details.push({
+          fileName,
+          totalRows: 0,
+          inserted: 0,
+          timeTaken: "0s",
+          error: err?.message,
+        });
         return 0;
       }
     };
@@ -135,25 +152,132 @@ module.exports = function (app, io) {
     console.log(
       `\n🚀 All Token Files Updated | Total Inserted: ${grandTotalInserted} | Total Time: ${totalTimeTaken}s\n`
     );
+
+    return {
+      totalInserted: grandTotalInserted,
+      totalTime: `${totalTimeTaken}s`,
+      files: details,
+    };
   };
 
+  const updateTokens = async () => {
+  try {
+    const LivepriceData = await Liveprice.find({}).sort({ expiry: 1 });
+
+    if (LivepriceData && LivepriceData.length > 0) {
+      LivepriceData.map(async (token) => {
+        const { symbol, expiry, price, segment, instrument_token } = token;
+
+        if (price == undefined || price == null || price == "") {
+          return "No Price Found";
+        }
+
+        const numericPrice = parseFloat(price);
+
+        const FindDataAliceToken = await alice_tokens.aggregate([
+          {
+            $match: {
+              symbol: symbol,
+              expiry: expiry,
+            },
+          },
+          {
+            $addFields: {
+              strikeNumeric: { $toDouble: "$strike" },
+            },
+          },
+          {
+            $facet: {
+              before: [
+                { $match: { strikeNumeric: { $lt: numericPrice } } },
+                { $sort: { strikeNumeric: -1 } },
+                { $limit: 15 },
+                { $sort: { strikeNumeric: 1 } }, // restore original order
+              ],
+              exact: [{ $match: { strikeNumeric: numericPrice } }],
+              after: [
+                { $match: { strikeNumeric: { $gt: numericPrice } } },
+                { $sort: { strikeNumeric: 1 } },
+                { $limit: 15 },
+              ],
+            },
+          },
+          {
+            $project: {
+              combined: {
+                $concatArrays: ["$before", "$exact", "$after"],
+              },
+            },
+          },
+          { $unwind: "$combined" },
+          { $replaceRoot: { newRoot: "$combined" } },
+        ]);
+
+
+        if (FindDataAliceToken && FindDataAliceToken.length > 0) {
+          let UpdateReq = FindDataAliceToken.map((token) => {
+            return {
+              instrument_token: token.instrument_token,
+              symbol: token.symbol,
+              expiry: token.expiry,
+              segment: token.segment,
+              Exch: token.Exch,
+              exch_seg: token.exch_seg,
+
+
+
+            };
+          });
+
+          if (UpdateReq) {
+            await TokensModel.bulkWrite(
+              UpdateReq.map((token) => {
+                return {
+                  updateOne: {
+                    filter: { instrument_token: token.instrument_token },
+                    update: { $set: token },
+                    upsert: true,
+                  },
+                };
+              })
+            );
+          }
+        }
+
+
+      });
+    }
+
+    return "🚀 Tokens updated successfully in DB.";
+
+  } catch (error) {
+    console.error("❌ Error updating tokens:", error);
+    return "Failed to update tokens.";
+  }
+  };
+
+  // 1. UPDATE ALICE TOKENS DIRECTLY IN MONGODB
   app.get("/update/alice/token", async (req, res) => {
     try {
-      await updateTokensDirectly();
+      const result = await updateTokensDirectly();
       res.json({
         success: true,
-        message: "Alice tokens updated in MongoDB (via API).",
+        message: "Alice tokens updated in MongoDB.",
+        totalInserted: result.totalInserted,
+        totalTime: result.totalTime,
+        files: result.files,
       });
     } catch (error) {
       console.error("❌ Error updating tokens:", error);
-      res.status(500).json({ success: false, message: "Token update failed." });
+      res.json({ success: false, message: "Token update failed." });
     }
   });
 
-  app.get("/Liveprice/tokens", async (req, res) => {
+  // 2. Update Index Price Tokens
+  app.get("/update/index/tokens", async (req, res) => {
     try {
       const tokens = await alice_tokens
-        .find({ segment: "f" })
+        .find({ InstrumentType: "FUTIDX" })
         .select({
           instrument_token: 1,
           symbol: 1,
@@ -177,11 +301,11 @@ module.exports = function (app, io) {
         const data = result.map((token) => {
           return {
             instrument_token: token.instrument_token,
+            exch_seg: token.exch_seg,
             symbol: token.symbol,
             expiry: token.expiry,
             segment: token.segment,
             Exch: token.Exch,
-            exchange: token.exch_seg,
           };
         });
 
@@ -223,15 +347,14 @@ module.exports = function (app, io) {
         let BseChain = bseTokens.map((token) => {
           return {
             instrument_token: token.instrument_token,
+            exch_seg: token.exch_seg,
             symbol: token.symbol,
             expiry: token.expiry,
             segment: token.segment,
             Exch: token.Exch,
-            exchange: token.exch_seg,
           };
         });
 
-        console.log("bseTokens", BseChain);
         if (BseChain.length > 0) {
           await Liveprice.bulkWrite(
             BseChain.map((token) => {
@@ -247,14 +370,18 @@ module.exports = function (app, io) {
         }
       }
 
-      res.json({ success: true, message: "Live Price Token Update" });
+      return res.json({
+        success: true,
+        message: "Index Future Token Update in DB",
+      });
     } catch (error) {
       console.error("❌ Error fetching tokens:", error);
-      res.status(500).json({ success: false, message: "Token fetch failed." });
+      res.json({ success: false, message: "Token fetch failed." });
     }
   });
 
-  app.get("/update/stock-token", async (req, res) => {
+  //3. Update Cash Stock Tokens
+  app.get("/update/cash/stock", async (req, res) => {
     try {
       let Tokens = [
         "RELIANCE",
@@ -299,24 +426,26 @@ module.exports = function (app, io) {
         "AUBANK",
       ];
 
-      let stockTokens = await alice_tokens.find({
+      let stockTokens = await alice_tokens?.find({
         symbol: { $in: Tokens },
         Exch: "NSE",
-        segment: "cm",
+        segment: "CM",
       });
-      let stockTokenData = stockTokens.map((token) => {
+
+      let stockTokenData = stockTokens?.map((token) => {
         return {
           instrument_token: token.instrument_token,
+          exch_seg: token.exch_seg,
           symbol: token.symbol,
           expiry: token.expiry,
           segment: token.segment,
           Exch: token.Exch,
-          exchange: token.exch_seg,
         };
       });
-      if (stockTokenData.length > 0) {
-        await TokensModel.bulkWrite(
-          stockTokenData.map((token) => {
+
+      if (stockTokenData?.length > 0) {
+        await TokensModel?.bulkWrite(
+          stockTokenData?.map((token) => {
             return {
               updateOne: {
                 filter: { symbol: token.symbol },
@@ -328,24 +457,23 @@ module.exports = function (app, io) {
         );
       }
 
-      res.json({
+      return res.json({
         success: true,
-        message: "Stock tokens updated successfully.",
+        message: "successfully updated Stocks Token In DB.",
       });
     } catch (error) {
       console.error("❌ Error updating stock tokens:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Failed to update stock tokens." });
+      res.json({ success: false, message: "Failed to update stock tokens." });
     }
   });
 
+  //4. UPDATE ANY WHERE ALICE CREDENTIALS
   app.post("/update/alice-credentials", async (req, res) => {
     try {
       const { token, userid } = req.body;
 
       if (!token || !userid) {
-        return res.status(400).json({
+        return res.json({
           success: false,
           message: "Token and User ID are required.",
         });
@@ -354,11 +482,11 @@ module.exports = function (app, io) {
       const UpdateCredentials = await Credential.updateOne(
         { user_id: userid },
         { access_token: token },
-
-        {upsert: true}
+        { upsert: true }
       );
+
       if (!UpdateCredentials) {
-        return res.status(404).json({
+        return res.json({
           success: false,
           message: "Credentials not found.",
         });
@@ -367,17 +495,24 @@ module.exports = function (app, io) {
       res.json({
         success: true,
         message: "Credentials updated successfully.",
-        UpdateCredentials
+        UpdateCredentials,
       });
     } catch (error) {
       console.error("❌ Error updating credentials:", error);
-      res.status(500).json({
+      res.json({
         success: false,
         message: "Failed to update credentials.",
       });
     }
   });
 
-
-  
+  //5. UPDATE CHAIN TOKENS TO
+  app.get("/update/chain-tokens", async (req, res) => {
+   let response = await updateTokens();
+   if(response){
+    return res.json({ message: "Api Hit Succefully", data: response });
+   }else{
+    return res.json({ message: "Api Hit Succefully" ,data : "No data found"});
+   }
+  });
 };

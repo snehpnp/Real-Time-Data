@@ -32,9 +32,8 @@ const AliceTokenSchema = new mongoose.Schema({
     },
     instrument_token: {
         type: String,
-        // unique: true
-        index: true
-        
+        // unique: true,
+        index: true 
     },
     lotsize: {
         type: String,
@@ -51,6 +50,11 @@ const AliceTokenSchema = new mongoose.Schema({
     },
     InstrumentType: { 
         type: String,
+    },
+    unique_key:{
+        type: String,
+        index: true,
+        unique: true
     },
     createdAt: {
         type: Date,

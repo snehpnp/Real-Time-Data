@@ -50,3 +50,7 @@ db.createView("oneMinuteView", "stocks", [
     }
   }
 ]);
+
+
+db.createView("chainView", "Tokens", [
+])

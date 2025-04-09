@@ -1,114 +1,136 @@
+// Refactored version of Alice WebSocket Manager with security, modularity, and reliability
+
 const axios = require("axios");
 const WebSocket = require("ws");
 const CryptoJS = require("crypto-js");
 const Stock = require("../models/Stock");
 const Credential = require("../models/Credentials");
-const { io } = require("../server"); // ✅ Import io instance
-const AliceToken = require("../models/Alicetoken"); // ✅ Import AliceToken model
+const { io } = require("../server");
+const Liveprices = require("../models/Liveprice");
+const TokensModel = require("../models/Token");
 
-let ws;
-let isSocketConnected = false; // Track WebSocket connection status
+let ws = null;
+let isSocketConnected = false;
+let retryCount = 0;
+const MAX_RETRIES = 5;
 
-const userSubscriptions = {}; // Client ke tokens track karne ke liye
+const userSubscriptions = new Map(); // socketId => [tokens]
 
+/** Util: Generate current time as HHMM */
+const getCurrentTime = () => {
+  const now = new Date();
+  return parseInt(`${now.getHours()}${now.getMinutes()}`);
+};
+
+/** Util: Send logs using logging library or console */
+const log = (...args) => console.log("[AliceSocket]", ...args);
+
+/** Client Socket Setup */
 io.on("connection", (socket) => {
-  console.log(`✅ Client connected: ${socket.id}`);
+  log(`Client connected: ${socket.id}`);
 
-  // User ID receive karna (Agar zaroorat ho)
   socket.on("subscribe", (userId) => {
-    console.log(`🆔 User ${userId} connected on socket ${socket.id}`);
+    log(`User ${userId} connected on socket ${socket.id}`);
   });
 
-  // Stocks subscription (tokens list receive karna)
   socket.on("subscribeStocks", (stockSymbols) => {
-    const tokens = stockSymbols.split("#"); // Split token string into array
-    userSubscriptions[socket.id] = tokens;
-    // console.log(`🔗 ${socket.id} subscribed to tokens:`, tokens);
-
-    ConnectSocketNewToken(socket.id, stockSymbols); // New tokens ke liye connection establish karein
+    const tokens = stockSymbols.split("#");
+    userSubscriptions.set(socket.id, tokens);
+    subscribeToNewTokens(socket.id, stockSymbols);
   });
 
-  // Client disconnect hone par data remove karein
   socket.on("disconnect", () => {
-    console.log(`🔴 Client disconnected: ${socket.id}`);
-    delete userSubscriptions[socket.id];
+    log(`Client disconnected: ${socket.id}`);
+    userSubscriptions.delete(socket.id);
   });
 });
 
-const ConnectSocketNewToken = async (socketId, stockSymbols) => {
-  const numbersToken = stockSymbols && stockSymbols.match(/\d+/g);
+const subscribeToNewTokens = async (socketId, stockSymbols) => {
+  const newTokenNumbers = stockSymbols.match(/\d+/g) || [];
 
-
-  const credentialsGet = await Credential.findOne({});
-  if (!credentialsGet) {
-    console.error("❌ No credentials found!");
+  const credentials = await Credential.findOne({});
+  if (!credentials?.channel_list) {
+    log("No valid credentials found!");
     return;
   }
 
-  if (
-    credentialsGet.channel_list == "" ||
-    credentialsGet.channel_list == null
-  ) {
-    console.error("❌ No credentials found!");
-    return;
-  }
-
-  const { channel_list } = credentialsGet;
-  const numbersToken1 = channel_list && channel_list.match(/\d+/g);
-
-  const newTokens = numbersToken.filter(
-    (token) => !numbersToken1.includes(token)
+  const existingTokenNumbers = credentials.channel_list.match(/\d+/g) || [];
+  const newTokens = newTokenNumbers.filter(
+    (token) => !existingTokenNumbers.includes(token)
   );
-
-  const tokensMatch = stockSymbols.split("#"); // Split token string into array
-
-
-  const matchedPra = tokensMatch.filter(item =>
-    newTokens.some(token => item.endsWith(token))
-  );
-  
-
-
-
+  const matchedTokens = stockSymbols
+    .split("#")
+    .filter((item) => newTokens.some((token) => item.endsWith(token)));
 
   if (newTokens.length > 0) {
-    const json = {
-      k: matchedPra.join("#"),
-      t: "t",
-    };
-    console.log("✅ Subscribed to new tokens:", json);
+    const json = { k: matchedTokens.join("#"), t: "t" };
     if (ws && isSocketConnected) {
       ws.send(JSON.stringify(json));
     } else {
-      console.error(
-        "❌ WebSocket is not connected. Cannot subscribe to new tokens."
-      );
+      log("WebSocket not connected. Cannot subscribe now.");
     }
   } else {
-    console.log("ℹ️ No new tokens to subscribe.");
+    log("No new tokens to subscribe.");
   }
 };
 
 
+// UPDATE INDEX PRICE
+const IndexPrice = async () => {
+  console.log("IndexPrice function called");
+  const credentials = await Credential.findOne({});
+  if (!credentials?.channel_list) {
+    log("No valid credentials found!");
+    return "No valid credentials found!";
+  }
+
+  const LivepricesToken = await Liveprices.find({});
+
+  if (!LivepricesToken || LivepricesToken.length === 0) {
+    console.log("❌ No live prices data found!");
+    return "❌ No live prices data found!";
+  }
+
+  const LivePriceChannel = LivepricesToken.map(
+    (item) => `${item.Exch?.toUpperCase()}|${item.instrument_token}`
+  ).join("#");
+
+  if (LivePriceChannel) {
+    const json = { k: LivePriceChannel, t: "t" };
+    if (ws && isSocketConnected) {
+      ws.send(JSON.stringify(json));
+      return json;
+
+    } else {
+
+      setTimeout(() => 
+        IndexPrice(), 2000
+      ); 
+      
+
+      Alice_Socket();
+
+      return "WebSocket not connected. Attempting to reconnect..."; 
 
 
+    }
+  } else {
+    log("No new tokens to subscribe.");
+    return "No new tokens to subscribe.";
+  }
+};
+
+// UPDATE Lice Price And Send Another Users
 const Alice_Socket = async () => {
   try {
-
-    const credentialsGet = await Credential.findOne({});
-    if (!credentialsGet) {
-      console.error("❌ No credentials found!");
-      return;
-    }
+    const credentials = await Credential.findOne({});
     if (
-      credentialsGet?.user_id == "" ||
-      credentialsGet?.access_token == "" ||
-      credentialsGet?.channel_list == "" ||
-      credentialsGet?.access_token == null ||
-      credentialsGet?.channel_list == null ||
-      credentialsGet?.user_id == null
+      !credentials ||
+      !credentials.user_id ||
+      !credentials.access_token ||
+      !credentials.channel_list
     ) {
-      console.error("❌ No credentials found!");
+      log("No valid credentials found!");
       return;
     }
 
@@ -116,12 +138,27 @@ const Alice_Socket = async () => {
       user_id: userId,
       access_token: userSession,
       channel_list,
-    } = credentialsGet;
+    } = credentials;
 
-    const aliceBaseUrl =
+    const GetTokens = await TokensModel.find({});
+    if (!GetTokens || GetTokens.length === 0) {
+      console.log("❌ No tokens data found!");
+      return "❌ No tokens data found!";
+    }
+    const tokenNumbers = GetTokens.map((item) =>  item.Exch +"|"+ item.instrument_token  ).join("#");
+    let json 
+    if (tokenNumbers) {
+       json = { k: tokenNumbers, t: "t" };
+    }else {
+      json = { k: channel_list, t: "t" };
+    }
+
+   
+    const baseUrl =
       "https://ant.aliceblueonline.com/rest/AliceBlueAPIService/api/";
+
     const response = await axios.post(
-      `${aliceBaseUrl}/ws/createSocketSess`,
+      `${baseUrl}/ws/createSocketSess`,
       { loginType: "API" },
       {
         headers: {
@@ -132,116 +169,111 @@ const Alice_Socket = async () => {
     );
 
     if (response.data.stat !== "Ok") {
-      console.error("❌ Failed to create WebSocket session:", response.data);
+      log("Failed to create WebSocket session:", response.data);
       return;
     }
 
     ws = new WebSocket("wss://ws1.aliceblueonline.com/NorenWS/");
 
-    ws.onopen = function () {
-      console.log("✅ WebSocket Connected!");
+    ws.on("open", () => {
+      log("WebSocket connected!");
       isSocketConnected = true;
+      retryCount = 0;
 
-      const encrcptToken = CryptoJS.SHA256(
+      const encryptedToken = CryptoJS.SHA256(
         CryptoJS.SHA256(userSession).toString()
       ).toString();
 
-      const initCon = {
-        susertoken: encrcptToken,
+      const initPayload = {
+        susertoken: encryptedToken,
         t: "c",
         actid: userId + "_API",
         uid: userId + "_API",
         source: "API",
       };
 
-      ws.send(JSON.stringify(initCon));
-    };
+      ws.send(JSON.stringify(initPayload));
+    });
 
-    ws.onmessage = async function (msg) {
-      const response = JSON.parse(msg.data);
+    ws.on("message", async (data) => {
+      const message = JSON.parse(data);
 
-      if (response.tk) {
-        try {
-          if (response.lp !== undefined && response.e !== undefined) {
-            const now = new Date();
-            const curTime = parseInt(`${now.getHours()}${now.getMinutes()}`);
+      if (message.tk && message.lp !== undefined && message.e !== undefined) {
+        const currentTime = getCurrentTime();
 
-            // ✅ Sirf relevant clients ko update bhejna
-            Object.entries(userSubscriptions).forEach(([socketId, tokens]) => {
-              if (tokens.includes(response.e + "|" + response.tk)) {
-                io.to(socketId).emit("stockUpdate", {
-                  token: response.tk,
-                  exchange: response.e,
-                  timestamp: curTime,
-                  lp: response.lp,
-                  t: response?.t,
-                  pc: response?.pc,
-                  v: response?.v,
-                  ft: response?.ft,
-                  bp1: response?.bp1,
-                  sp1: response?.sp1,
-                  bq1: response?.bq1,
-                  sq1: response?.sq1,
-                });
-              }
-            });
-
-            await Stock.insertMany({
-              token: response.tk,
-              lp: response.lp,
-              exc: response.e,
-              curTime,
-              ft: response.ft,
-              t: response?.t,
-              pc: response?.pc,
-              v: response?.v,
-              bp1: response?.bp1,
-              sp1: response?.sp1,
-              bq1: response?.bq1,
-              sq1: response?.sq1,
+        for (const [socketId, tokens] of userSubscriptions.entries()) {
+          if (tokens.includes(`${message.e}|${message.tk}`)) {
+            io.to(socketId).emit("stockUpdate", {
+              token: message.tk,
+              exchange: message.e,
+              timestamp: currentTime,
+              lp: message.lp,
+              ...message,
             });
           }
-        } catch (error) {
-          console.error("❌ Error processing stock data:", error);
         }
-      } else if (response.s === "OK") {
-        let json = {
-          k: channel_list,
-          t: "t",
-        };
-        await ws.send(JSON.stringify(json));
+
+        await Stock.insertMany({
+          token: message.tk,
+          lp: message.lp,
+          exc: message.e,
+          curTime: currentTime,
+          ...message,
+        });
+
+        // if (currentTime >= 900 && currentTime <= 930) {
+          await Liveprices.updateOne(
+            { instrument_token: message.tk },
+            {
+              $set: {
+                price: message.lp,
+              },
+            }
+          );
+        // }
+      } else if (message.s === "OK") {
+        ws.send(JSON.stringify(json));
       }
-    };
+    });
 
-    ws.onerror = function (error) {
-      console.error("❌ WebSocket error:", error);
+    ws.on("error", (error) => {
+      log("WebSocket error:", error);
       isSocketConnected = false;
-    };
+    });
 
-    ws.onclose = async function () {
-      console.log("🔴 WebSocket Disconnected!");
+    ws.on("close", () => {
+      log("WebSocket closed. Attempting reconnect...");
       isSocketConnected = false;
-      await socketRestart();
-    };
+      reconnectSocket();
+    });
   } catch (error) {
-    if (error?.response?.data == "Unauthorized") {
-      console.error("❌ Unauthorized access. Please login again!");
-      await Credential.updateOne({}, { $set: { access_token: null } });
+    if (error?.response?.data === "Unauthorized") {
+      log("Unauthorized access. Clearing token.");
+      await Credential.updateOne({}, { $set: { access_token: "" } });
+    } else {
+      log("Error in WebSocket setup:", error.message);
     }
+    reconnectSocket();
   }
 };
 
-// ✅ Function to restart WebSocket if disconnected
-const socketRestart = async () => {
-  if (!isSocketConnected) {
-    console.log("♻️ Reconnecting WebSocket in 5 seconds...");
-    setTimeout(Alice_Socket, 5000);
+/** Retry with backoff */
+const reconnectSocket = () => {
+  if (!isSocketConnected && retryCount < MAX_RETRIES) {
+    retryCount++;
+    const delay = retryCount * 5000; // backoff: 5s, 10s, 15s...
+    log(
+      `Reconnecting WebSocket in ${
+        delay / 1000
+      }s (Attempt ${retryCount}/${MAX_RETRIES})`
+    );
+    setTimeout(Alice_Socket, delay);
+  } else if (retryCount >= MAX_RETRIES) {
+    log("Max reconnect attempts reached. Manual intervention required.");
   }
 };
 
-// ✅ Function to check socket connection status
-const getSocketStatus = () => {
-  return isSocketConnected;
-};
+/** Public Methods */
+const getSocketStatus = () => isSocketConnected;
 
-module.exports = { Alice_Socket, getSocketStatus };
+module.exports = { Alice_Socket, getSocketStatus, IndexPrice };

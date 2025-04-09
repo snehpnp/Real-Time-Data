@@ -15,11 +15,24 @@ module.exports = { io }; // ✅ Export io instance for use in aliceSocket.js
 
 app.use(express.json());
 
-require("./services/Apis")(app,io);
+
+require("./services/Cron")(app, io); // ✅ Cron Jobs
+require("./services/Apis")(app, io); // ✅ APIs
 require("./services/Token")(app, io); // ✅ Token Service
 
+const { Alice_Socket, IndexPrice } = require("./services/aliceSocket");
 
-const { Alice_Socket } = require("./services/aliceSocket");
+// 6. Get Live Price Index Price Update
+app.get("/get/liveprice", async (req, res) => {
+ let Res = await IndexPrice();
+
+ if(Res){
+    return res.json({ message: "Api Hit Succefully", data: Res });
+ }else{
+
+  return res.json({ message: "Api Hit Succefully" ,data : "No data found"});
+ }
+});
 
 // Start Server
 const PORT = process.env.PORT || 5000;
